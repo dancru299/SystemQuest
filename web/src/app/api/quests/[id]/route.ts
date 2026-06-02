@@ -1,12 +1,16 @@
 import { addDays, parseISO, subDays } from "date-fns";
 import { format } from "date-fns";
+import { z } from "zod";
 import { ApiError, fail, ok } from "@/lib/api/response";
 import { getAuthedRequest } from "@/lib/api/auth";
 import { expectedQuestDay, todayInTimezone, DEFAULT_TIMEZONE } from "@/lib/quest/date";
+import { goalContractSchema, roadmapItemSchema } from "@/lib/validation/quest";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
+
+const roadmapSchema = z.array(roadmapItemSchema).min(1).max(24);
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
@@ -38,7 +42,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const { data: quest, error: questError } = await supabase
       .from("quests")
-      .select("id,total_days,start_date,current_day_number,status")
+      .select("id,total_days,start_date,current_day_number,status,goal_version,generated_up_to_day")
       .eq("id", id)
       .eq("user_id", user.id)
       .single();
@@ -100,6 +104,21 @@ export async function PATCH(request: Request, context: RouteContext) {
         "yyyy-MM-dd",
       );
     }
+    if (body.goal_contract) {
+      const goalContract = goalContractSchema.parse(body.goal_contract);
+      const roadmap = body.roadmap ? roadmapSchema.parse(body.roadmap) : undefined;
+      const nextVersion = quest.goal_version + 1;
+      patch.goal_contract = goalContract;
+      patch.goal_version = nextVersion;
+      patch.main_goal = goalContract.objective;
+      if (goalContract.targetDurationDays) {
+        patch.total_days = goalContract.targetDurationDays;
+        patch.current_day_number = Math.min(quest.current_day_number, goalContract.targetDurationDays);
+        patch.generated_up_to_day = Math.min(quest.generated_up_to_day ?? 1, goalContract.targetDurationDays);
+      }
+      if (roadmap) patch.roadmap = roadmap;
+      patch.status = "active";
+    }
 
     if (Object.keys(patch).length === 0) {
       throw new ApiError("VALIDATION_ERROR", "Không có trường hợp lệ để cập nhật.", 400);
@@ -113,6 +132,18 @@ export async function PATCH(request: Request, context: RouteContext) {
       .select("*")
       .single();
     if (error) throw error;
+
+    if (body.goal_contract) {
+      const { error: revisionError } = await supabase.from("quest_goal_revisions").insert({
+        user_id: user.id,
+        quest_id: id,
+        version_number: data.goal_version,
+        goal_contract: data.goal_contract,
+        roadmap: data.roadmap ?? [],
+        reason: typeof body.revision_reason === "string" ? body.revision_reason : "Goal contract changed",
+      });
+      if (revisionError) throw revisionError;
+    }
 
     return ok({ quest: data });
   } catch (error) {
@@ -141,4 +172,3 @@ export async function DELETE(_request: Request, context: RouteContext) {
     return fail(error);
   }
 }
-

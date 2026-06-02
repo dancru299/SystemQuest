@@ -35,13 +35,17 @@ export default async function QuestDayPage({ params }: PageProps) {
 
   const { data: quest } = await supabase
     .from("quests")
-    .select("id,title,total_days,current_day_number,start_date,status")
+    .select("id,title,total_days,current_day_number,generated_up_to_day,start_date,status")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
 
   if (!quest) notFound();
-  if (dayNumber > quest.total_days) redirect(`/app/quests/${id}/days/${quest.total_days}`);
+  const generatedUpToDay = Math.max(1, quest.generated_up_to_day ?? 1);
+  const unlockedDayNumber = Math.min(quest.current_day_number ?? 1, quest.total_days, generatedUpToDay);
+  if (dayNumber > quest.total_days || dayNumber > generatedUpToDay || dayNumber > unlockedDayNumber) {
+    redirect(`/app/quests/${id}/days/${unlockedDayNumber}`);
+  }
 
   const { data: days } = await supabase
     .from("quest_days")
@@ -56,12 +60,19 @@ export default async function QuestDayPage({ params }: PageProps) {
   const expectedDay = Math.min(expectedQuestDay(quest.start_date, timezone), quest.total_days);
   const missedDays = Math.max(0, expectedDay - quest.current_day_number);
 
+  const { data: dayReport } = await supabase
+    .from("quest_day_reports")
+    .select(
+      "id,overall_completion_percent,time_spent_minutes,blockers,outcome,notes,evidence_url,mission_reports,submitted_at",
+    )
+    .eq("quest_day_id", selectedDay.id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
   const normalizedDays = days.map((day) => ({
     id: day.id,
     day_number: day.day_number,
     title: day.title,
-    missions: missionsSchema.parse(day.missions),
-    completed_mission_ids: idsSchema.parse(day.completed_mission_ids),
     is_day_completed: day.is_day_completed,
   }));
 
@@ -80,6 +91,7 @@ export default async function QuestDayPage({ params }: PageProps) {
       }}
       days={normalizedDays}
       timing={{ expectedDay, missedDays }}
+      initialReport={dayReport}
     />
   );
 }

@@ -14,7 +14,7 @@ export default async function AppHomePage() {
 
   const { data: quest } = await supabase
     .from("quests")
-    .select("id,current_day_number")
+    .select("id,current_day_number,generated_up_to_day")
     .eq("user_id", user.id)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -23,5 +23,7 @@ export default async function AppHomePage() {
 
   if (!quest) redirect("/app/import");
 
-  redirect(`/app/quests/${quest.id}/days/${quest.current_day_number ?? 1}`);
+  const generatedUpToDay = Math.max(1, quest.generated_up_to_day ?? 1);
+  const dayNumber = Math.min(quest.current_day_number ?? 1, generatedUpToDay);
+  redirect(`/app/quests/${quest.id}/days/${dayNumber}`);
 }

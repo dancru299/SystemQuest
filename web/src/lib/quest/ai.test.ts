@@ -34,7 +34,7 @@ describe("AI quest parser", () => {
     expect(parseAiQuest(`\`\`\`json\n${validQuestJson}\n\`\`\``).totalDays).toBe(1);
   });
 
-  it("repairs totalDays when provider returns fewer day objects", () => {
+  it("keeps totalDays as full horizon while capping detailed rolling days", () => {
     const partialQuest = JSON.parse(validQuestJson);
     partialQuest.totalDays = 30;
     partialQuest.days = Array.from({ length: 7 }, (_, index) => ({
@@ -47,10 +47,12 @@ describe("AI quest parser", () => {
     ];
 
     const parsed = parseAiQuest(JSON.stringify(partialQuest));
-    expect(parsed.totalDays).toBe(7);
+    expect(parsed.totalDays).toBe(30);
     expect(parsed.days).toHaveLength(7);
     expect(parsed.days[6].day).toBe(7);
-    expect(parsed.phases[0].dayRange).toBe("Ngay 1-7");
+    expect(parsed.phases[0].dayRange).toBe("Ngay 1-30");
+    expect(parsed.goalContract?.objective).toBe(partialQuest.mainGoal);
+    expect(parsed.roadmap?.[0]?.name).toBe("Rolling Window Dau Tien");
   });
 
   it("parses fenced provider output with trailing commas", () => {

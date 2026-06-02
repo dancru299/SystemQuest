@@ -1,9 +1,16 @@
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { QuestGoalContractEditor } from "@/components/quest/QuestGoalContractEditor";
 import { QuestOverviewPanel } from "@/components/quest/QuestOverviewPanel";
 import { hasSupabaseEnv } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { missionSchema, phaseSchema, type AiQuestDay } from "@/lib/validation/quest";
+import {
+  goalContractSchema,
+  missionSchema,
+  phaseSchema,
+  roadmapItemSchema,
+  type AiQuestDay,
+} from "@/lib/validation/quest";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -11,6 +18,7 @@ type PageProps = {
 
 const phasesSchema = z.array(phaseSchema);
 const missionsSchema = z.array(missionSchema);
+const roadmapSchema = z.array(roadmapItemSchema);
 
 export default async function QuestOverviewPage({ params }: PageProps) {
   if (!hasSupabaseEnv()) return null;
@@ -41,18 +49,30 @@ export default async function QuestOverviewPage({ params }: PageProps) {
     mentorSpeech: day.mentor_speech ?? "",
     missions: missionsSchema.parse(day.missions),
   }));
+  const goalContract = goalContractSchema.nullable().catch(null).parse(quest.goal_contract);
+  const roadmap = roadmapSchema.catch([]).parse(quest.roadmap);
 
   return (
-    <QuestOverviewPanel
-      quest={{
-        id: quest.id,
-        title: quest.title,
-        mainGoal: quest.main_goal,
-        totalDays: quest.total_days,
-        phases: phasesSchema.parse(quest.phases),
-        days,
-        completedDays: sortedDays.filter((day) => day.is_day_completed).length,
-      }}
-    />
+    <div className="grid gap-6">
+      <QuestOverviewPanel
+        quest={{
+          id: quest.id,
+          title: quest.title,
+          mainGoal: quest.main_goal,
+          totalDays: quest.total_days,
+          goalContract,
+          roadmap,
+          phases: phasesSchema.parse(quest.phases),
+          days,
+          completedDays: sortedDays.filter((day) => day.is_day_completed).length,
+        }}
+      />
+      <QuestGoalContractEditor
+        questId={quest.id}
+        initialGoalContract={goalContract}
+        initialRoadmap={roadmap}
+        totalDays={quest.total_days}
+      />
+    </div>
   );
 }

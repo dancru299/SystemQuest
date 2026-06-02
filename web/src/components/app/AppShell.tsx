@@ -58,6 +58,11 @@ export function AppShell({
 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const isQuestDayView = /^\/app\/quests\/[^/]+\/days\/[^/]+/.test(pathname);
+  const mainClassName = isQuestDayView
+    ? "flex-1 min-w-0 overflow-x-hidden px-3 py-5 sm:px-5 lg:px-6 xl:px-8"
+    : "flex-1 px-4 py-6 sm:px-6 lg:px-8";
+  const contentClassName = isQuestDayView ? "mx-0 w-full min-w-0 max-w-none" : "mx-auto w-full max-w-6xl";
   const [stats, setStats] = useState(initialStats);
   const [lowGraphics, setLowGraphics] = useState(
     () => typeof window !== "undefined" && localStorage.getItem("quest-low-graphics") === "true",
@@ -91,7 +96,7 @@ export function AppShell({
   return (
     <div className="relative min-h-svh overflow-hidden">
       <ParticleCanvas disabled={lowGraphics} />
-      <div className="relative z-10 flex min-h-svh">
+      <div className="relative z-10 flex min-h-svh min-w-0">
         <aside className="hidden w-[76px] shrink-0 border-r border-white/10 bg-void/70 backdrop-blur md:flex md:flex-col md:items-center md:py-4">
           <Link href="/app" className="mb-7 grid size-11 place-items-center border border-rune/50 text-rune-bright">
             <Sparkles className="size-6" />
@@ -134,9 +139,9 @@ export function AppShell({
           ) : null}
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
           <header className="sticky top-0 z-30 border-b border-white/10 bg-void/80 backdrop-blur">
-            <div className="flex min-h-18 items-center gap-4 px-4 sm:px-6">
+            <div className="flex min-h-18 min-w-0 items-center gap-4 px-4 sm:px-6">
               <Link href="/app" className="flex min-w-0 items-center gap-3">
                 <div className="grid size-10 shrink-0 place-items-center border border-rune/50 text-rune-bright">
                   <MoonStar className="size-5" />
@@ -214,8 +219,8 @@ export function AppShell({
             ) : null}
           </header>
 
-          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-            <div className="mx-auto max-w-6xl">{children}</div>
+          <main className={mainClassName}>
+            <div className={contentClassName}>{children}</div>
           </main>
 
           <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-4 border-t border-white/10 bg-void/95 md:hidden">

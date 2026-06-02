@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { CalendarDays, CheckCircle2, Flag, ScrollText, Shield, Swords } from "lucide-react";
-import type { AiQuest, AiQuestDay, Phase } from "@/lib/validation/quest";
+import type { AiQuest, AiQuestDay, GoalContract, Phase, RoadmapItem } from "@/lib/validation/quest";
 
 type OverviewQuest = {
   id?: string;
   title: string;
   mainGoal: string;
   totalDays: number;
+  goalContract?: GoalContract | null;
+  roadmap?: RoadmapItem[] | null;
   phases: Phase[];
   days: AiQuestDay[];
   completedDays?: number;
@@ -31,6 +33,8 @@ export function fromAiQuest(quest: AiQuest): OverviewQuest {
     title: quest.title,
     mainGoal: quest.mainGoal,
     totalDays: quest.totalDays,
+    goalContract: quest.goalContract,
+    roadmap: quest.roadmap,
     phases: quest.phases,
     days: quest.days,
   };
@@ -45,6 +49,8 @@ export function QuestOverviewPanel({
 }: QuestOverviewPanelProps) {
   const missionCount = getMissionCount(quest.days);
   const completedDays = quest.completedDays ?? 0;
+  const roadmap = quest.roadmap?.length ? quest.roadmap : [];
+  const goalContract = quest.goalContract;
 
   return (
     <section className="rune-border border border-rune/25 bg-deep/72 p-5 shadow-rune sm:p-7">
@@ -60,8 +66,8 @@ export function QuestOverviewPanel({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Tong ngay", value: quest.totalDays, icon: CalendarDays, color: "text-rune-bright" },
-          { label: "So phase", value: quest.phases.length, icon: Flag, color: "text-rune-bright" },
-          { label: "Tong mission", value: missionCount, icon: Swords, color: "text-gold" },
+          { label: "Roadmap", value: roadmap.length || quest.phases.length, icon: Flag, color: "text-rune-bright" },
+          { label: "Mission da tao", value: missionCount, icon: Swords, color: "text-gold" },
           { label: "Da hoan thanh", value: completedDays, icon: CheckCircle2, color: "text-ice" },
         ].map((stat) => {
           const Icon = stat.icon;
@@ -88,8 +94,53 @@ export function QuestOverviewPanel({
         </div>
       </div>
 
+      {goalContract ? (
+        <div className="mb-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="border border-white/10 bg-void/45 p-5">
+            <p className="text-xs uppercase tracking-[0.25em] text-ice">Goal Contract</p>
+            <p className="mt-3 text-sm leading-7 text-text-dim">{goalContract.objective}</p>
+            <div className="mt-4 grid gap-2 text-sm text-text-dim">
+              <p>
+                <span className="text-text-primary">Deadline:</span> {goalContract.deadline}
+              </p>
+              {goalContract.successCriteria.map((criterion, index) => (
+                <p key={`${criterion}-${index}`}>- {criterion}</p>
+              ))}
+            </div>
+          </div>
+          <div className="border border-white/10 bg-void/45 p-5">
+            <p className="text-xs uppercase tracking-[0.25em] text-gold">Rang buoc</p>
+            <div className="mt-3 grid gap-2 text-sm leading-6 text-text-dim">
+              {(goalContract.constraints.length ? goalContract.constraints : ["Chua co rang buoc rieng."]).map(
+                (constraint, index) => (
+                  <p key={`${constraint}-${index}`}>- {constraint}</p>
+                ),
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {roadmap.length ? (
+        <div className="mb-6">
+          <h2 className="mb-4 font-display text-xl text-text-primary">Roadmap Cap Cao</h2>
+          <div className="divide-y divide-white/10 border border-white/10">
+            {roadmap.map((item, index) => (
+              <div key={`${item.name}-${index}`} className="grid gap-4 p-4 lg:grid-cols-[150px_1fr_1fr]">
+                <div>
+                  <p className="font-display text-base text-rune-bright">{item.name}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.14em] text-text-muted">{item.timeframe}</p>
+                </div>
+                <p className="text-sm leading-6 text-text-dim">{item.objective}</p>
+                <p className="text-sm leading-6 text-text-dim">{item.exitCriteria}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div>
-        <h2 className="mb-4 font-display text-xl text-text-primary">Cac Phase</h2>
+        <h2 className="mb-4 font-display text-xl text-text-primary">Cua So Rolling Da Tao</h2>
         <div className="divide-y divide-white/10 border border-white/10">
           {quest.phases.map((phase, index) => (
             <div key={`${phase.name}-${index}`} className="grid gap-4 p-4 sm:grid-cols-[64px_1fr_auto] sm:items-center">
@@ -153,4 +204,3 @@ export function QuestOverviewPanel({
     </section>
   );
 }
-

@@ -56,11 +56,22 @@ export async function POST(request: Request) {
         title: quest.title,
         main_goal: quest.mainGoal,
         total_days: quest.totalDays,
+        goal_contract: quest.goalContract ?? {
+          objective: quest.mainGoal,
+          deadline: `Trong ${quest.totalDays} ngay`,
+          targetDurationDays: quest.totalDays,
+          constraints: [],
+          successCriteria: ["Hoan thanh muc tieu chinh dung han."],
+          nonNegotiables: ["Muc tieu va deadline cua version hien tai."],
+        },
+        roadmap: quest.roadmap ?? quest.phases,
+        goal_version: 1,
         phases: quest.phases,
         ai_raw_plan: planText ?? null,
         status: "active",
-        generation_status: "full",
-        generated_up_to_day: quest.totalDays,
+        generation_status: quest.days.length < quest.totalDays ? "partial" : "full",
+        generated_up_to_day: quest.days.length,
+        generated_window_days: Math.min(7, quest.days.length),
         start_date: startDate,
         current_day_number: 1,
       })
@@ -83,9 +94,25 @@ export async function POST(request: Request) {
       throw daysError;
     }
 
+    const { error: revisionError } = await supabase.from("quest_goal_revisions").insert({
+      user_id: user.id,
+      quest_id: insertedQuest.id,
+      version_number: 1,
+      goal_contract: quest.goalContract ?? {
+        objective: quest.mainGoal,
+        deadline: `Trong ${quest.totalDays} ngay`,
+        targetDurationDays: quest.totalDays,
+        constraints: [],
+        successCriteria: ["Hoan thanh muc tieu chinh dung han."],
+        nonNegotiables: ["Muc tieu va deadline cua version hien tai."],
+      },
+      roadmap: quest.roadmap ?? quest.phases,
+      reason: "Initial adaptive planning contract",
+    });
+    if (revisionError) throw revisionError;
+
     return ok({ questId: insertedQuest.id, currentDayNumber: insertedQuest.current_day_number });
   } catch (error) {
     return fail(error);
   }
 }
-

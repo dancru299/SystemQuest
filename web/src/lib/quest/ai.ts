@@ -6,7 +6,7 @@ import {
   getProviderPriority,
 } from "@/lib/env";
 import { hasSupabaseAdminEnv, createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { aiQuestSchema, type AiQuest } from "@/lib/validation/quest";
+import { aiQuestSchema, questDaySchema, type AiQuest, type AiQuestDay } from "@/lib/validation/quest";
 
 export type AiProvider = "gemini" | "openai" | "anthropic" | "deepseek";
 
@@ -37,6 +37,17 @@ type AiRuntimeConfig = {
   maxTokens: number;
 };
 
+type AdaptiveNextDayInput = {
+  questTitle: string;
+  mainGoal: string;
+  totalDays: number;
+  nextDayNumber: number;
+  goalContract: unknown;
+  roadmap: unknown;
+  previousDay: unknown;
+  report: unknown;
+};
+
 export const DEFAULT_PROVIDER_PRIORITY: AiProvider[] = ["gemini", "openai", "anthropic"];
 
 export const DEFAULT_SYSTEM_PROMPT = `Ban la he thong AI phan tich ke hoach ca nhan va tao lo trinh nhiem vu.
@@ -46,7 +57,21 @@ Schema:
 {
   "title": "string, ten ngan muc tieu duoi 50 ky tu",
   "mainGoal": "string, mo ta tong quan 2-3 cau",
-  "totalDays": "number, 7-30; neu plan dai hon hay cat thanh phase dau tien 30 ngay",
+  "totalDays": "number, tong so ngay theo deadline/toan bo lo trinh; co the dai nhung toi da 7300",
+  "goalContract": {
+    "objective": "string, muc tieu bat bien cua version hien tai",
+    "deadline": "string, deadline hoac moc thoi gian bat bien cua version hien tai",
+    "targetDurationDays": 365,
+    "constraints": ["string, rang buoc thuc te"],
+    "successCriteria": ["string, tieu chi thanh cong do duoc"],
+    "nonNegotiables": ["string, dieu khong duoc doi trong version nay"]
+  },
+  "roadmap": [{
+    "name": "string, ten moc nam/quy/thang/phase",
+    "timeframe": "string, vi du Nam 1, Quy 2, Thang 1-3",
+    "objective": "string, muc tieu cap cao cua moc nay",
+    "exitCriteria": "string, dau hieu da qua duoc moc nay"
+  }],
   "phases": [{ "name": "string", "desc": "string", "dayRange": "Ngay 1-7" }],
   "days": [{
     "day": 1,
@@ -64,6 +89,10 @@ Schema:
 }
 
 Quy tac:
+- Goal contract phai neu ro objective, deadline, constraints va successCriteria. Objective + deadline la bat bien trong version hien tai.
+- Roadmap chi can cap cao, khong viet tung ngay cho lo trinh dai.
+- Days chi la rolling plan chi tiet cho 1-7 ngay dau tien. Khong tao hon 7 ngay chi tiet trong mot lan import.
+- Neu lo trinh dai hon 7 ngay, totalDays van la tong horizon, nhung days.length chi toi da 7.
 - Moi ngay co 2-4 missions, toi thieu 1 mission main.
 - Nhiem vu phai cu the, co the thuc hien duoc trong ngay.
 - xp_reward: main=50, bonus=30, rest=20.
@@ -110,11 +139,12 @@ function normalizeAiQuestCandidate(value: unknown) {
   const days = Array.isArray(value.days) ? value.days.filter(isRecord) : [];
   if (!days.length) return value;
 
-  const normalizedDays = days.slice(0, 30).map((day, index) => ({
+  const normalizedDays = days.slice(0, 7).map((day, index) => ({
     ...day,
     day: index + 1,
   }));
-  const totalDays = normalizedDays.length;
+  const requestedTotalDays = typeof value.totalDays === "number" ? Math.round(value.totalDays) : normalizedDays.length;
+  const totalDays = Math.min(7300, Math.max(normalizedDays.length, requestedTotalDays));
 
   const phases = Array.isArray(value.phases)
     ? value.phases.filter(isRecord).map((phase, index, allPhases) => {
@@ -131,6 +161,26 @@ function normalizeAiQuestCandidate(value: unknown) {
   return {
     ...value,
     totalDays,
+    goalContract: isRecord(value.goalContract)
+      ? value.goalContract
+      : {
+          objective: typeof value.mainGoal === "string" ? value.mainGoal : "Hoan thanh muc tieu da nhap.",
+          deadline: `Trong ${totalDays} ngay`,
+          targetDurationDays: totalDays,
+          constraints: [],
+          successCriteria: ["Hoan thanh cac milestone chinh dung han."],
+          nonNegotiables: ["Muc tieu va deadline cua version hien tai."],
+        },
+    roadmap: Array.isArray(value.roadmap) && value.roadmap.length
+      ? value.roadmap
+      : [
+          {
+            name: "Rolling Window Dau Tien",
+            timeframe: `Ngay 1-${normalizedDays.length}`,
+            objective: "Thuc hien cua so hanh dong dau tien va thu thap feedback thuc te.",
+            exitCriteria: "Co bao cao ngay va du lieu de dieu chinh ke hoach tiep theo.",
+          },
+        ],
     days: normalizedDays,
     phases,
   };
@@ -265,6 +315,29 @@ export function mockAiQuest(planText: string): AiQuest {
         dayRange: "Ngay 4-7",
       },
     ],
+    goalContract: {
+      objective:
+        "Bien ke hoach lon thanh chuoi hanh dong co bao cao thuc te, dieu chinh theo tien do hang ngay.",
+      deadline: "Trong 7 ngay dau cua version MVP",
+      targetDurationDays: 7,
+      constraints: ["Chi tao chi tiet cua so 7 ngay dau de tranh lap ke hoach gia tao."],
+      successCriteria: ["Co tien do moi ngay", "Co bao cao blocker va ket qua thuc te"],
+      nonNegotiables: ["Muc tieu version hien tai", "Deadline version hien tai"],
+    },
+    roadmap: [
+      {
+        name: "Khoi Dong",
+        timeframe: "Ngay 1-3",
+        objective: "Lam ro muc tieu, tao nhip thuc hien va ghi nhan feedback dau tien.",
+        exitCriteria: "Hoan thanh bao cao ngay va xac dinh vat can lon nhat.",
+      },
+      {
+        name: "Dieu Chinh",
+        timeframe: "Ngay 4-7",
+        objective: "Dung report de chia nho mission va tang xac suat hoan thanh.",
+        exitCriteria: "Co chu ky lap ke hoach - hanh dong - bao cao on dinh.",
+      },
+    ],
     days: Array.from({ length: 7 }, (_, index) => {
       const day = index + 1;
       return {
@@ -307,7 +380,7 @@ export function mockAiQuest(planText: string): AiQuest {
 
 function buildUserPrompt(planText: string, strictJson = false) {
   const jsonReminder =
-    "Output must be a valid json object. The response must contain only json, with no markdown fence and no extra prose. Important: totalDays must exactly equal days.length. If you generate only 7 day objects, set totalDays to 7. Never claim totalDays is 30 unless all days 1 through 30 are present.";
+    "Output must be a valid json object. The response must contain only json, with no markdown fence and no extra prose. Important: totalDays is the full deadline horizon, but days is only the detailed rolling window for days 1-7. Never generate more than 7 day objects. Include goalContract and roadmap.";
   return strictJson
     ? `${jsonReminder}\n\nKe hoach nguoi dung:\n\n${planText.slice(0, 10000)}\n\nLan truoc json khong hop le. Sua loi totalDays/days neu co. Chi tra ve json thuan tuy dung schema.`
     : `${jsonReminder}\n\nKe hoach nguoi dung:\n\n${planText.slice(0, 10000)}`;
@@ -473,6 +546,189 @@ async function callProvider(
   if (runtime.provider === "openai") return callOpenAi(runtime, planText, config, strictJson);
   if (runtime.provider === "anthropic") return callAnthropic(runtime, planText, config, strictJson);
   throw new Error(`Provider ${runtime.provider} is not implemented yet.`);
+}
+
+async function callProviderWithPrompt(runtime: ProviderRuntime, prompt: string, config: AiRuntimeConfig) {
+  if (runtime.provider === "gemini") {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${runtime.model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": runtime.apiKey,
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: config.systemPrompt }],
+          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: config.temperature,
+            maxOutputTokens: Math.min(config.maxTokens, 4000),
+            responseMimeType: "application/json",
+          },
+        }),
+      },
+    );
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || `Gemini request failed with ${response.status}`);
+    }
+    return (
+      payload?.candidates?.[0]?.content?.parts
+        ?.map((part: { text?: string }) => part.text ?? "")
+        .join("\n") ?? ""
+    );
+  }
+
+  if (runtime.provider === "openai") {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${runtime.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: runtime.model,
+        instructions: config.systemPrompt,
+        input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+        max_output_tokens: Math.min(config.maxTokens, 4000),
+        temperature: config.temperature,
+        text: { format: { type: "json_object" } },
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || `OpenAI request failed with ${response.status}`);
+    }
+    return extractOpenAiText(payload);
+  }
+
+  if (runtime.provider === "anthropic") {
+    const client = new Anthropic({ apiKey: runtime.apiKey });
+    const response = await client.messages.create({
+      model: runtime.model,
+      max_tokens: Math.min(config.maxTokens, 4000),
+      temperature: config.temperature,
+      system: config.systemPrompt,
+      messages: [{ role: "user", content: prompt }],
+    });
+    return response.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n");
+  }
+
+  throw new Error(`Provider ${runtime.provider} is not implemented yet.`);
+}
+
+function mockAdaptiveNextDay(input: AdaptiveNextDayInput): AiQuestDay {
+  return {
+    day: input.nextDayNumber,
+    title: `Ngay ${input.nextDayNumber}: Dieu Chinh Va Tien Len`,
+    mentorSpeech:
+      "Dung bao cao ngay truoc de thu nho scope, xu ly blocker lon nhat va giu deadline trong tam ngam.",
+    missions: [
+      {
+        id: `d${input.nextDayNumber}_m1`,
+        title: "Carry-over viec quan trong nhat",
+        desc: "Chon mot viec con dang do hoac bi chan tu bao cao truoc, chia thanh buoc 25-45 phut va hoan thanh ban nho nhat.",
+        type: "main",
+        xp_reward: 50,
+        order: 1,
+      },
+      {
+        id: `d${input.nextDayNumber}_m2`,
+        title: "Giam blocker lon nhat",
+        desc: "Viet ro blocker, chon mot hanh dong co the lam ngay de giam anh huong cua no.",
+        type: "main",
+        xp_reward: 50,
+        order: 2,
+      },
+      {
+        id: `d${input.nextDayNumber}_m3`,
+        title: "Cap nhat bao cao ngan",
+        desc: "Ghi lai ket qua, % hoan thanh va dieu can doi cho ngay tiep theo.",
+        type: "bonus",
+        xp_reward: 30,
+        order: 3,
+      },
+    ],
+  };
+}
+
+function buildAdaptivePrompt(input: AdaptiveNextDayInput) {
+  return `Tao hoac dieu chinh Quest Day ${input.nextDayNumber} dua tren bao cao thuc te.
+
+Chi tra ve JSON object dung schema:
+{
+  "day": ${input.nextDayNumber},
+  "title": "string",
+  "mentorSpeech": "string",
+  "missions": [{
+    "id": "string",
+    "title": "string",
+    "desc": "string",
+    "type": "main|bonus|rest",
+    "xp_reward": 50,
+    "order": 1
+  }]
+}
+
+Quy tac:
+- Khong thay doi objective va deadline trong goalContract.
+- Dung report de carry-over viec chua xong, giam scope neu ti le hoan thanh thap, chia nho mission bi blocked, doi chien thuat neu blocker lap lai.
+- Canh bao rui ro tre deadline trong mentorSpeech neu report cho thay tien do thap.
+- Moi ngay co 2-4 missions, toi thieu 1 mission main.
+- Mission phai lam duoc trong ngay.
+- Chi tra JSON hop le.
+
+Quest:
+${JSON.stringify({
+  title: input.questTitle,
+  mainGoal: input.mainGoal,
+  totalDays: input.totalDays,
+  nextDayNumber: input.nextDayNumber,
+  goalContract: input.goalContract,
+  roadmap: input.roadmap,
+  previousDay: input.previousDay,
+  report: input.report,
+})}`;
+}
+
+function parseAdaptiveNextDay(raw: string, nextDayNumber: number) {
+  const parsed = parseJsonTolerant(raw);
+  const candidate = isRecord(parsed) && isRecord(parsed.day) ? parsed.day : parsed;
+  return questDaySchema.parse({
+    ...(isRecord(candidate) ? candidate : {}),
+    day: nextDayNumber,
+  });
+}
+
+export async function adaptNextDayWithAi(
+  input: AdaptiveNextDayInput,
+): Promise<{ day: AiQuestDay; provider: AiProvider | "mock"; model: string }> {
+  const config = await getAiRuntimeConfig();
+  const runtime = config.priority
+    .map((provider) => config.providers[provider])
+    .find((provider): provider is ProviderRuntime => Boolean(provider));
+
+  if (!runtime) {
+    if (process.env.NODE_ENV !== "production") {
+      return { day: mockAdaptiveNextDay(input), provider: "mock", model: "local-dev" };
+    }
+    throw new Error("Chua cau hinh API key hop le cho provider AI nao.");
+  }
+
+  try {
+    const raw = await callProviderWithPrompt(runtime, buildAdaptivePrompt(input), config);
+    return { day: parseAdaptiveNextDay(raw, input.nextDayNumber), provider: runtime.provider, model: runtime.model };
+  } catch (error) {
+    throw new Error(
+      `${runtime.provider}:${runtime.model} - ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+  }
 }
 
 export async function analyzePlanWithAi(

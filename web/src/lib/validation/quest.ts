@@ -15,8 +15,24 @@ export const phaseSchema = z.object({
   dayRange: z.string().min(1).max(80),
 });
 
+export const goalContractSchema = z.object({
+  objective: z.string().min(1).max(2000),
+  deadline: z.string().min(1).max(120),
+  targetDurationDays: z.number().int().min(1).max(7300).optional(),
+  constraints: z.array(z.string().min(1).max(300)).max(12).default([]),
+  successCriteria: z.array(z.string().min(1).max(300)).min(1).max(12),
+  nonNegotiables: z.array(z.string().min(1).max(300)).max(8).default([]),
+});
+
+export const roadmapItemSchema = z.object({
+  name: z.string().min(1).max(120),
+  timeframe: z.string().min(1).max(120),
+  objective: z.string().min(1).max(800),
+  exitCriteria: z.string().min(1).max(800),
+});
+
 export const questDaySchema = z.object({
-  day: z.number().int().min(1).max(30),
+  day: z.number().int().min(1).max(7300),
   title: z.string().min(1).max(160),
   mentorSpeech: z.string().min(1).max(1000).optional().default(""),
   missions: z
@@ -32,21 +48,23 @@ export const aiQuestSchema = z
   .object({
     title: z.string().min(1).max(80),
     mainGoal: z.string().min(1).max(2000),
-    totalDays: z.number().int().min(1).max(30),
+    totalDays: z.number().int().min(1).max(7300),
+    goalContract: goalContractSchema.optional(),
+    roadmap: z.array(roadmapItemSchema).min(1).max(24).optional(),
     phases: z.array(phaseSchema).min(1).max(8),
-    days: z.array(questDaySchema).min(1).max(30),
+    days: z.array(questDaySchema).min(1).max(7),
   })
   .superRefine((quest, ctx) => {
-    if (quest.days.length !== quest.totalDays) {
+    if (quest.days.length > quest.totalDays) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "days.length must match totalDays",
+        message: "days.length must be <= totalDays",
         path: ["days"],
       });
     }
 
     const dayNumbers = new Set(quest.days.map((day) => day.day));
-    for (let day = 1; day <= quest.totalDays; day += 1) {
+    for (let day = 1; day <= quest.days.length; day += 1) {
       if (!dayNumbers.has(day)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -68,6 +86,7 @@ export const createQuestSchema = z.object({
 
 export type Mission = z.infer<typeof missionSchema>;
 export type Phase = z.infer<typeof phaseSchema>;
+export type GoalContract = z.infer<typeof goalContractSchema>;
+export type RoadmapItem = z.infer<typeof roadmapItemSchema>;
 export type AiQuestDay = z.infer<typeof questDaySchema>;
 export type AiQuest = z.infer<typeof aiQuestSchema>;
-

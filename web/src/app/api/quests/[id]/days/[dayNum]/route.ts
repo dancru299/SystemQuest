@@ -9,6 +9,10 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     const { id, dayNum } = await context.params;
     const dayNumber = Number(dayNum);
+    if (!Number.isInteger(dayNumber) || dayNumber < 1) {
+      throw new ApiError("VALIDATION_ERROR", "Quest day khong hop le.", 400);
+    }
+
     const { supabase, user } = await getAuthedRequest();
 
     const { data: quest, error: questError } = await supabase
@@ -20,6 +24,13 @@ export async function GET(_request: Request, context: RouteContext) {
 
     if (questError || !quest) {
       throw new ApiError("QUEST_NOT_FOUND", "Quest không tồn tại hoặc không thuộc về bạn.", 404);
+    }
+
+    if (dayNumber > quest.total_days) {
+      throw new ApiError("QUEST_DAY_NOT_FOUND", "Ngay nhiem vu khong ton tai.", 404);
+    }
+    if (dayNumber > quest.current_day_number) {
+      throw new ApiError("QUEST_DAY_LOCKED", "Ngay nay chua mo khoa. Hay hoan thanh Quest Day hien tai truoc.", 403);
     }
 
     const { data: day, error: dayError } = await supabase
@@ -38,4 +49,3 @@ export async function GET(_request: Request, context: RouteContext) {
     return fail(error);
   }
 }
-
