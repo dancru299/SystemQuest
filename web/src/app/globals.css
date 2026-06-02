@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+:root {
+  --void: #050510;
+  --deep: #0a0a1f;
+  --rune: #7c4dff;
+  --rune-bright: #b388ff;
+  --gold: #ffd700;
+  --ice: #64ffda;
+  --ember: #ff6b35;
+  --text-primary: #e8e0ff;
+  --text-dim: #9088bb;
+  --text-muted: #5a5280;
+  --border-soft: rgba(179, 136, 255, 0.28);
+  --shadow-rune: 0 0 0 1px rgba(124, 77, 255, 0.22), 0 18px 60px rgba(7, 4, 26, 0.65);
+  --font-display: var(--font-cinzel);
+  --font-body: var(--font-noto);
+}
+
+@theme inline {
+  --color-void: var(--void);
+  --color-deep: var(--deep);
+  --color-rune: var(--rune);
+  --color-rune-bright: var(--rune-bright);
+  --color-gold: var(--gold);
+  --color-ice: var(--ice);
+  --color-ember: var(--ember);
+  --color-text-primary: var(--text-primary);
+  --color-text-dim: var(--text-dim);
+  --color-text-muted: var(--text-muted);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-geist-mono);
+  --shadow-rune: var(--shadow-rune);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: var(--void);
+  color: var(--text-primary);
+}
+
+body {
+  overflow-x: hidden;
+  font-family: var(--font-body), Arial, sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: rgba(255, 215, 0, 0.25);
+  color: var(--text-primary);
+}
+
+.system-bg {
+  background:
+    radial-gradient(circle at 20% 8%, rgba(124, 77, 255, 0.22), transparent 25%),
+    radial-gradient(circle at 82% 12%, rgba(255, 107, 53, 0.12), transparent 22%),
+    radial-gradient(circle at 78% 86%, rgba(100, 255, 218, 0.08), transparent 24%),
+    linear-gradient(180deg, #060612 0%, #050510 48%, #03030b 100%);
+}
+
+.rune-border {
+  position: relative;
+}
+
+.rune-border::before,
+.rune-border::after {
+  content: "";
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(179, 136, 255, 0.8), transparent);
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.rune-border::before {
+  top: 0;
+}
+
+.rune-border::after {
+  bottom: 0;
+}
+
+.low-graphics *,
+.low-graphics *::before,
+.low-graphics *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
+.low-graphics .particle-canvas {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .particle-canvas {
+    display: none;
+  }
+}
+
